@@ -1,0 +1,14 @@
+version: "3"
+
+services:
+  test_postgres:
+    image: postgres:15.4
+    container_name: test_postgres
+    volumes:
+      - .:/docker-entrypoint-initdb.d
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
