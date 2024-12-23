@@ -1,7 +1,7 @@
 import pg from 'pg';
 import format from 'pg-format';
 
-import { ParsedLinks } from 'src/index.ts';
+import { ParsedLinks, ParsedLinksFromDB } from 'src/index.ts';
 
 const client = new pg.Client({
   user: 'postgres',
@@ -104,7 +104,7 @@ export const getInnerLinkToProceed = (): Promise<{ id: number; href: string; tex
       console.error('Error getInnerLinkToProceed', e);
     });
 
-const baseGetLinksToFile = (tableName: typeof innerTableName | typeof outerTableName): Promise<ParsedLinks> =>
+const baseGetLinksToFile = (tableName: typeof innerTableName | typeof outerTableName): Promise<ParsedLinksFromDB> =>
   client
     .query({
       text: `SELECT * FROM ${tableName} ORDER BY id ASC`,
@@ -113,6 +113,7 @@ const baseGetLinksToFile = (tableName: typeof innerTableName | typeof outerTable
       res.rows.map((row) => ({
         href: row.href,
         text: row.text,
+        status: row.status,
       })),
     )
     .catch((e) => {
@@ -121,6 +122,6 @@ const baseGetLinksToFile = (tableName: typeof innerTableName | typeof outerTable
       throw e;
     });
 
-export const getOuterLinksToFile = (): Promise<ParsedLinks> => baseGetLinksToFile(outerTableName);
+export const getOuterLinksToFile = (): Promise<ParsedLinksFromDB> => baseGetLinksToFile(outerTableName);
 
-export const getInnerLinksToFile = (): Promise<ParsedLinks> => baseGetLinksToFile(innerTableName);
+export const getInnerLinksToFile = (): Promise<ParsedLinksFromDB> => baseGetLinksToFile(innerTableName);

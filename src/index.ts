@@ -1,5 +1,5 @@
 import { parse } from 'node-html-parser';
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 import HTMLElement from 'node-html-parser/dist/nodes/html';
 import fs from 'fs';
 
@@ -14,6 +14,7 @@ import {
 } from 'src/db.ts';
 
 export type ParsedLinks = { href: string; text: string }[];
+export type ParsedLinksFromDB = { href: string; text: string; status: number }[];
 
 const getTextInside = (elem: HTMLElement) => elem.innerText.replace(/\s+/gm, ' ').trim();
 
@@ -53,10 +54,11 @@ const parseResponse = (str: string) =>
     },
   });
 
-// SPA?
+// HOW TO SPA?
 const doParse = (data: any, host: string) => getLinks(parseResponse(data).getElementsByTagName('a'), host);
 
-const linksToString = (links: ParsedLinks): string => links.map((link) => `${link.href} (${link.text})`).join('\n');
+const linksToString = (links: ParsedLinksFromDB): string =>
+  links.map((link) => `${link.href} (${link.text}) [${link.status}]`).join('\n');
 
 const getHost = (url: string): string => {
   const host = new URL(url).host;
@@ -64,41 +66,45 @@ const getHost = (url: string): string => {
   return host.startsWith('www.') ? host.substring(4) : host;
 };
 
-const writeToFile = (data: ParsedLinks, fileName: 'outer' | 'inner'): void => {
+const writeToFile = (data: ParsedLinksFromDB, fileName: 'outer' | 'inner'): void => {
   fs.writeFile(`files/${fileName}.txt`, linksToString(data), 'utf8', (error) => {
     if (error) {
-      console.error(`[${fileName}] An error occurred while writing to the file:`, error);
+      console.error(`[${fileName}] an error occurred while writing to the file:`, error);
       return;
     }
-    console.log(`[${fileName}] File has been written successfully.`);
+    console.log(`[${fileName}] file has been written successfully.`);
   });
 };
 
 const getLinkAndParse = (link: string) =>
-  axios.get(link).then(({ data }) => {
-    const res = doParse(data, getHost(link));
+  axios
+    .get(link)
+    .then(({ data }) => {
+      const res = doParse(data, getHost(link));
 
-    return Promise.all([insertInnerLinks(res.inner), insertOuterLinks(res.outer)]);
-  });
+      return Promise.all([insertInnerLinks(res.inner), insertOuterLinks(res.outer)]);
+    })
+    .catch((e: AxiosError) => {
+      console.log(`error getLinkAndParse: [${link}]`, e.message);
+      return '';
+    });
 
 let counter = 1;
+let limit = 100;
+let startTime = performance.now();
 
-const startLink = 'https://bandcamp.com';
+const startLink = '';
 
 const main = async () => {
   const link = await getInnerLinkToProceed();
 
-  if (link && counter < 10) {
-    console.log('link', link);
-
+  if (link && counter <= limit) {
     await getLinkAndParse(link.href);
 
     console.log(`iteration ${counter++} is complete`);
 
     await main();
   } else {
-    console.log('ending');
-
     const resOuter = await getOuterLinksToFile();
     const resInner = await getInnerLinksToFile();
 
@@ -106,6 +112,8 @@ const main = async () => {
     writeToFile(resInner, 'inner');
 
     disconnect();
+
+    console.log(`ending. time: ${performance.now() - startTime}`);
   }
 };
 
