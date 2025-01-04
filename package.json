@@ -10,6 +10,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@typescript-eslint/eslint-plugin": "^8.19.0",
     "axios": "^1.7.9",
     "node-html-better-parser": "^1.4.7",
     "node-html-parser": "^6.1.13",

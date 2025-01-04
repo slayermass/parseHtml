@@ -9,12 +9,21 @@ import {
   getOuterLinksToFile,
   insertInnerLinks,
   insertOuterLinks,
-  getInnerLinkToProceed,
+  getUniqueInnerLinkToProceed,
   getInnerLinksToFile,
+  setInnerLinkAsProceeded,
 } from 'src/db.ts';
 
 export type ParsedLinks = { href: string; text: string }[];
-export type ParsedLinksFromDB = { href: string; text: string; status: number }[];
+export type ParsedLinksFromDB = { id: number; href: string; text: string; status: number }[];
+
+/** settings */
+let counter = 1;
+let limit = 10;
+let startTime = performance.now();
+let host = '';
+const startLink = ''; // no trailing slash
+/** end settings */
 
 const getTextInside = (elem: HTMLElement) => elem.innerText.replace(/\s+/gm, ' ').trim();
 
@@ -26,7 +35,18 @@ const getHref = (elem: HTMLElement) => {
 
 const filterUselessLinks = (elems: ParsedLinks): ParsedLinks => elems.filter((link) => link.href.startsWith('http'));
 
-const getLinks = (elems: HTMLElement[], host: string): { outer: ParsedLinks; inner: ParsedLinks } => {
+const isLinkInner = (href: string) => href.includes(host) || href.startsWith('/');
+
+const compensateInnerLinks = (links: ParsedLinks): ParsedLinks =>
+  links.map((link) => {
+    if (link.href.startsWith('/')) {
+      link.href = `${startLink}${link.href}`;
+    }
+
+    return link;
+  });
+
+const getLinks = (elems: HTMLElement[]): { outer: ParsedLinks; inner: ParsedLinks } => {
   const outerLinks: ParsedLinks = [];
   const innerLinks: ParsedLinks = [];
 
@@ -34,11 +54,11 @@ const getLinks = (elems: HTMLElement[], host: string): { outer: ParsedLinks; inn
     const href = getHref(elem);
 
     if (href) {
-      (href.includes(host) ? innerLinks : outerLinks).push({ href, text: getTextInside(elem) });
+      (isLinkInner(href) ? innerLinks : outerLinks).push({ href, text: getTextInside(elem) });
     }
   }
 
-  return { inner: innerLinks, outer: filterUselessLinks(outerLinks) };
+  return { inner: compensateInnerLinks(innerLinks), outer: filterUselessLinks(outerLinks) };
 };
 
 const parseResponse = (str: string) =>
@@ -54,8 +74,8 @@ const parseResponse = (str: string) =>
     },
   });
 
-// HOW TO SPA?
-const doParse = (data: any, host: string) => getLinks(parseResponse(data).getElementsByTagName('a'), host);
+// HOW TO SPA? headless chrome API?
+const doParse = (data: any) => getLinks(parseResponse(data).getElementsByTagName('a'));
 
 const linksToString = (links: ParsedLinksFromDB): string =>
   links.map((link) => `${link.href} (${link.text}) [${link.status}]`).join('\n');
@@ -80,7 +100,7 @@ const getLinkAndParse = (link: string) =>
   axios
     .get(link)
     .then(({ data }) => {
-      const res = doParse(data, getHost(link));
+      const res = doParse(data);
 
       return Promise.all([insertInnerLinks(res.inner), insertOuterLinks(res.outer)]);
     })
@@ -89,22 +109,22 @@ const getLinkAndParse = (link: string) =>
       return '';
     });
 
-let counter = 1;
-let limit = 100;
-let startTime = performance.now();
-
-const startLink = '';
-
 const main = async () => {
-  const link = await getInnerLinkToProceed();
+  const link = await getUniqueInnerLinkToProceed();
 
   if (link && counter <= limit) {
     await getLinkAndParse(link.href);
+
+    await setInnerLinkAsProceeded(link.id);
 
     console.log(`iteration ${counter++} is complete`);
 
     await main();
   } else {
+    if (counter < limit) {
+      console.log("Link couldn\'t complete");
+    }
+
     const resOuter = await getOuterLinksToFile();
     const resInner = await getInnerLinksToFile();
 
@@ -119,6 +139,8 @@ const main = async () => {
 
 (async () => {
   await cleanup();
+
+  host = getHost(startLink);
 
   await insertInnerLinks([{ href: startLink, text: 'initial' }]);
 
