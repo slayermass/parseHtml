@@ -3,6 +3,16 @@ import axios, { AxiosError } from 'axios';
 import HTMLElement from 'node-html-parser/dist/nodes/html';
 import fs from 'fs';
 
+// import {
+//   cleanup,
+//   disconnect,
+//   getOuterLinksToFile,
+//   insertInnerLinks,
+//   insertOuterLinks,
+//   getUniqueInnerLinkToProceed,
+//   getInnerLinksToFile,
+//   setInnerLinkAsProceeded,
+// } from 'src/postgresql.ts';
 import {
   cleanup,
   disconnect,
@@ -12,10 +22,10 @@ import {
   getUniqueInnerLinkToProceed,
   getInnerLinksToFile,
   setInnerLinkAsProceeded,
-} from 'src/db.ts';
+} from 'src/inMemory.ts';
 
 export type ParsedLinks = { href: string; text: string }[];
-export type ParsedLinksFromDB = { id: number; href: string; text: string; status: number }[];
+export type ParsedLinksFromDB = { id: number; href: string; text: string; status: 0 | 1 | 2 }[];
 
 /** settings */
 let counter = 1;
@@ -81,7 +91,9 @@ const linksToString = (links: ParsedLinksFromDB): string =>
   links.map((link) => `${link.href} (${link.text}) [${link.status}]`).join('\n');
 
 const getHost = (url: string): string => {
-  const host = new URL(url).host;
+  let hosts = new URL(url).host.split('.');
+
+  let host = [hosts.at(-2), hosts.at(-1)].join('.');
 
   return host.startsWith('www.') ? host.substring(4) : host;
 };

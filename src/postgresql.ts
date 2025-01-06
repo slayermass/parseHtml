@@ -3,6 +3,10 @@ import format from 'pg-format';
 
 import { ParsedLinks, ParsedLinksFromDB } from 'src/index.ts';
 
+/**
+ * postgresql store
+ */
+
 const client = new pg.Client({
   user: 'postgres',
   password: 'postgres',
@@ -45,7 +49,7 @@ const resetTables = () =>
 
 /** ----------- */
 
-export const disconnect = () => {
+export const disconnect: () => void = () => {
   client.end();
 };
 
@@ -63,11 +67,12 @@ export const cleanup = () => {
   });
 };
 
-export const insertInnerLinks = (data: ParsedLinks) => {
+export const insertInnerLinks: (data: ParsedLinks) => Promise<void> = (data) => {
   const values = data.map(({ href, text }) => [href, text, 0]);
 
   return client
     .query(format(`INSERT INTO ${innerTableName}(href, text, status) VALUES %L ON CONFLICT (href) DO NOTHING`, values))
+    .then(() => undefined)
     .catch((e) => {
       if (e.code !== '42601') {
         // syntax error at or near "ON"
@@ -76,11 +81,12 @@ export const insertInnerLinks = (data: ParsedLinks) => {
     });
 };
 
-export const insertOuterLinks = (data: ParsedLinks) => {
+export const insertOuterLinks: (data: ParsedLinks) => Promise<void> = (data) => {
   const values = data.map(({ href, text }) => [href, text]);
 
   return client
     .query(format(`INSERT INTO ${outerTableName}(href, text) VALUES %L ON CONFLICT (href) DO NOTHING`, values))
+    .then(() => undefined)
     .catch((e) => {
       if (e.code !== '42601') {
         // syntax error at or near "ON"
@@ -89,7 +95,7 @@ export const insertOuterLinks = (data: ParsedLinks) => {
     });
 };
 
-export const setInnerLinkAsProceeded = (id: number): Promise<number | void> =>
+export const setInnerLinkAsProceeded: (id: number) => Promise<number | void> = (id) =>
   client
     .query({
       text: `UPDATE ${innerTableName} SET status = 2 WHERE id = $1`,
@@ -125,7 +131,9 @@ export const getUniqueInnerLinkToProceed = (): Promise<ParsedLinksFromDB[0] | vo
       console.error('Error getInnerLinkToProceed', e);
     });
 
-const baseGetLinksToFile = (tableName: typeof innerTableName | typeof outerTableName): Promise<ParsedLinksFromDB> =>
+const baseGetLinksToFile: (tableName: typeof innerTableName | typeof outerTableName) => Promise<ParsedLinksFromDB> = (
+  tableName,
+) =>
   client
     .query({
       text: `SELECT * FROM ${tableName} ORDER BY id ASC`,
